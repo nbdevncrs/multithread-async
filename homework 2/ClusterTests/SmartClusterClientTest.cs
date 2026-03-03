@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading.Tasks;
 using ClusterClient.Clients;
 using FluentAssertions;
 using NUnit.Framework;
@@ -64,6 +65,33 @@ namespace ClusterTests
 
 			foreach(var time in ProcessRequests(6000))
 				time.Should().BeCloseTo(TimeSpan.FromMilliseconds(4000), Epsilon);
+		}
+		
+		[Test]
+		public async Task ShouldLearnBetweenSequentialRequests()
+		{
+			var slow = CreateServer(3000);
+			var fast = CreateServer(200);
+
+			var addresses = new[]
+			{
+				$"http://127.0.0.1:{slow.ServerOptions.Port}/{slow.ServerOptions.MethodName}/",
+				$"http://127.0.0.1:{fast.ServerOptions.Port}/{fast.ServerOptions.MethodName}/"
+			};
+
+			var client = CreateClient(addresses);
+
+			var sw1 = Stopwatch.StartNew();
+			await client.ProcessRequestAsync("00000001", TimeSpan.FromMilliseconds(5000));
+			sw1.Stop();
+
+			var sw2 = Stopwatch.StartNew();
+			await client.ProcessRequestAsync("00000002", TimeSpan.FromMilliseconds(5000));
+			sw2.Stop();
+			
+			sw2.Elapsed.Should().BeLessThan(sw1.Elapsed);
+			
+			sw2.Elapsed.Should().BeCloseTo(TimeSpan.FromMilliseconds(200), Epsilon);
 		}
 	}
 }
